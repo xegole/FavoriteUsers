@@ -1,8 +1,13 @@
 package com.bigthinkapps.sw.test.ui.main
 
+import android.app.SearchManager
 import android.content.res.Configuration
+import android.database.Cursor
+import android.database.MatrixCursor
 import android.os.Bundle
+import android.provider.BaseColumns
 import android.view.*
+import android.widget.AutoCompleteTextView
 import androidx.appcompat.widget.SearchView
 import androidx.cursoradapter.widget.CursorAdapter
 import androidx.cursoradapter.widget.SimpleCursorAdapter
@@ -16,12 +21,17 @@ import com.bigthinkapps.sw.test.models.User
 import com.bigthinkapps.sw.test.ui.users.adapters.UsersAdapter
 import com.bigthinkapps.sw.test.utils.Metrics
 import com.bigthinkapps.sw.test.utils.calculateScreenSizeAndItemsOnIt
+import com.bigthinkapps.sw.test.utils.hideKeyboard
 import kotlinx.android.synthetic.main.main_fragment.*
 
 class MainFragment : Fragment() {
     private var viewModel: MainViewModel? = null
     private lateinit var binding: MainFragmentBinding
     private var searchView: SearchView? = null
+
+    private val from = arrayOf(SearchManager.SUGGEST_COLUMN_TEXT_1)
+    private val to = intArrayOf(R.id.item_label)
+    lateinit var cursorAdapter: SimpleCursorAdapter
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -54,13 +64,11 @@ class MainFragment : Fragment() {
         viewModel?.notifyMainList?.observe(viewLifecycleOwner, {
             if (it == true) {
                 val users = viewModel?.lastUsers
-                if (allList.adapter == null && users != null && users.isNotEmpty()) setAdapter(
-                    allList,
-                    users
-                )
-                else if (users != null && users.isNotEmpty()) viewModel?.usersAdapter?.addUsers(
-                    users
-                )
+                if (allList.adapter == null && users != null && users.isNotEmpty()) {
+                    setAdapter(allList, users)
+                } else if (users != null && users.isNotEmpty()) {
+                    viewModel?.usersAdapter?.addUsers(users)
+                }
                 setSuggestionsAdapter()
             }
         })
@@ -138,21 +146,35 @@ class MainFragment : Fragment() {
     // Not Working
     private fun setSuggestionsAdapter() {
         val lastSuggestions = viewModel?.usersAdapter?.users?.map { it.firstName }?.toTypedArray()
-        val suggestionsAdapter = SimpleCursorAdapter(
-            activity, android.R.layout.simple_list_item_1, null, lastSuggestions,
-            intArrayOf(android.R.id.text1), CursorAdapter.FLAG_REGISTER_CONTENT_OBSERVER
+        cursorAdapter = SimpleCursorAdapter(
+            context,
+            R.layout.search_item,
+            null,
+            from,
+            to,
+            CursorAdapter.FLAG_REGISTER_CONTENT_OBSERVER
         )
-        viewModel?.usersSuggestionsAdapter = suggestionsAdapter
+
+        viewModel?.usersSuggestionsAdapter = cursorAdapter
 
         searchView?.suggestionsAdapter = viewModel?.usersSuggestionsAdapter
+
         searchView?.setOnSuggestionListener(object : SearchView.OnSuggestionListener {
             override fun onSuggestionSelect(position: Int): Boolean {
                 return false
             }
 
             override fun onSuggestionClick(position: Int): Boolean {
-                return false
+                hideKeyboard()
+                val cursor = searchView?.suggestionsAdapter?.getItem(position) as Cursor
+                val selection =
+                    cursor.getString(cursor.getColumnIndex(SearchManager.SUGGEST_COLUMN_TEXT_1))
+                searchView?.setQuery(selection, false)
+
+                // Do something with selection
+                return true
             }
+
         })
     }
 
@@ -173,7 +195,6 @@ class MainFragment : Fragment() {
 
     override fun onPrepareOptionsMenu(menu: Menu) {
         super.onPrepareOptionsMenu(menu)
-
         val menuItem = menu.findItem(R.id.search)
         searchView = menuItem.actionView as SearchView
         searchView?.queryHint = getString(R.string.search_users_title)
@@ -189,6 +210,14 @@ class MainFragment : Fragment() {
                 searchView?.suggestionsAdapter?.filter?.filter(newText)
                 viewModel?.usersAdapter?.filter?.filter(newText)
                 viewModel?.favoritesAdapter?.filter?.filter(newText)
+                val cursor = MatrixCursor(arrayOf(BaseColumns._ID, SearchManager.SUGGEST_COLUMN_TEXT_1))
+                newText?.let {
+                    viewModel?.usersAdapter?.users?.forEachIndexed { index, suggestion ->
+                        if (suggestion.firstName.contains(newText, true))
+                            cursor.addRow(arrayOf(index, suggestion.firstName))
+                    }
+                }
+                cursorAdapter.changeCursor(cursor)
                 return true
             }
         })

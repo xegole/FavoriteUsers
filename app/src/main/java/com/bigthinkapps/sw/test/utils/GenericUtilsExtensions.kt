@@ -1,12 +1,16 @@
 package com.bigthinkapps.sw.test.utils
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.graphics.Rect
 import android.provider.ContactsContract
 import android.util.DisplayMetrics
 import android.view.View
 import android.view.Window
+import android.view.inputmethod.InputMethodManager
+import androidx.appcompat.app.AppCompatActivity
+import androidx.fragment.app.Fragment
 import kotlin.math.truncate
 
 data class ScreenSize(val height: Int, val width: Int)
@@ -46,7 +50,8 @@ fun Activity?.calculateScreenSizeAndItemsOnIt(
 }
 
 fun Activity?.getAppBarHeight(): Int {
-    val styledAttributes = this?.theme?.obtainStyledAttributes(intArrayOf(android.R.attr.actionBarSize))
+    val styledAttributes =
+        this?.theme?.obtainStyledAttributes(intArrayOf(android.R.attr.actionBarSize))
     val appBarHeight = styledAttributes?.getDimension(0, 0f)?.toInt()
     styledAttributes?.recycle()
 
@@ -73,4 +78,16 @@ fun Activity?.addContact(fullName: String, phone: String, email: String? = null)
     // optionals
     if (email != null) intent.putExtra(ContactsContract.Intents.Insert.EMAIL, email)
     this.startActivity(intent)
+}
+
+fun Context.hideKeyboard(view: View) {
+    val inputMethodManager =
+        getSystemService(AppCompatActivity.INPUT_METHOD_SERVICE) as InputMethodManager
+    inputMethodManager.hideSoftInputFromWindow(view.windowToken, 0)
+}
+
+fun Fragment.hideKeyboard() {
+    view?.let {
+        activity?.hideKeyboard(it)
+    }
 }
